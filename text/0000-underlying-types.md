@@ -28,8 +28,8 @@ test to distinguish them is efficient.  Then, what about
 `(pos[])|(neg[])`?  Representing this as `int[]` makes the type test
 very expensive.
 
-Let us assume `pos|neg` should be implemented as a true union, which
-provides by far the simplest general rule.  We might say it's
+Let us assume `pos|neg` should be implemented as a true union (as this
+provides by far the simplest general rule).  We might say it's
 _underlying type_ is `int|int`.  But, now we are in a pickle.
 Consider this example:
 
@@ -44,9 +44,9 @@ function f(pos|neg x) -> int:
 The type of `x` on the true branch becomes `(pos|neg)&pos`.  The
 problem is that, if we expand this to `(pos&pos)|(pos&neg)` we end up
 with an underlying type of `int|int` (i.e. because `pos&neg` cannot be
-reduced to `void` without reasoning about integer values).  Since we
-know `x is pos` we expect `x` to have an underlying type of `int` in
-the true branch.
+reduced to `void` without reasoning about integer arithmetic).  This
+is disappointing as, from `x is pos`, we would expect `x` to have an
+underlying type of `int` in the true branch.
 
 **The key challenge here is that the type `(pos|neg)&pos` is perfectly
   manageable at the source level, but ambiguous at the underlying level**.
@@ -64,11 +64,24 @@ function f({int x, int y}|null x) -> {int y, int x}:
 
 Here, the type of `x` on the true branch is `{int x,int y}&{int y, int
 x}`.  _Therefore, what is its underlying type?_  Either `{int x,int
-y}` or `{int y,int x}` would seem viable candidates.
+y}` or `{int y,int x}` would seem equally viable candidates.
 
 # Technical Details
 
+The language of _underlying types_ is given by the following
+(simplified) grammar:
 
+```
+UT ::= ('int' | 'uint') [':' IntegerConst] | '{' (UT Ident)* '}' | UT '[' ']' | UT
+('|' UT)+
+```
+
+For the purposes of this RFC we consider only this simplified
+language, though it is relatively easy to fully extend this.  Note,
+however, that intersection and difference types are _not_ present in
+the language of underlying types.  Likewise, unions are _tagged_ and,
+hence, have a slightly different semantic where e.g. `int | int` is
+permitted and `int|null` is not equivalent to `null|int`, etc.
 
 # Terminology
 
