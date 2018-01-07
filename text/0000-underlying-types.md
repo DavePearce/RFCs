@@ -72,18 +72,97 @@ The language of _underlying types_ is given by the following
 (simplified) grammar:
 
 ```
-UT ::= ('int' | 'uint') [':' IntegerConst] | '{' (UT Ident)* '}' | UT '[' ']' | UT
+UT ::= ('int' | 'uint') [':' IntegerConst] | '{' UT Ident (',' UT Ident)+ '}' | UT '[' ']' | UT
 ('|' UT)+
 ```
 
 For the purposes of this RFC we consider only this simplified
 language, though it is relatively easy to fully extend this.  Note,
 however, that intersection and difference types are _not_ present in
-the language of underlying types.  Likewise, unions are _tagged_ and,
-hence, have a slightly different semantic where e.g. `int | int` is
-permitted and `int|null` is not equivalent to `null|int`, etc.
+the language of underlying types.  Likwise, nominal types are also not
+present and some recursive type constructor is required for them.
+Also, unions are _tagged_ and, hence, have a slightly different
+semantic where e.g. `int | int` is permitted and `int|null` is not
+equivalent to `null|int`, etc.  Finally, records have a slightly
+different semantic where e.g. `{int x, int y}` is not equivalent to
+`{int y, int x}`.
+
+**GOAL:** The goal, then, of this RFC is to enable a clear mapping
+  from the Whiley type of a given variable to its underlying type.
+
+**CHALLENGE:** The key challenge is that of _ambiguous types_ which
+have no unique mapping to an underlying type.
+
+## Ambiguous Types
+
+The question then is: _how and where do ambiguous types arise?_ In
+fact, the answer to this is fairly clear.  Ambiguous types can only
+arise in the presence of type intersection or difference.  Examples:
+
+**Intersections:**
+```
+(pos|neg)&pos
+```
+```
+{int x, int y} & {int y, int x}
+```
+```
+({int x, int y, int z}|{int x, int z, int y}) & {int z, int y, int x}
+```
+
+**Differences:**
+```
+(pos|null)-pos
+```
+```
+({int x, int y, int z}|null) - {int z, int y, int x}
+```
+
+_One of the interesting qualities of these is that intersection types
+are harder because they lack direction._  This suggests a solution:
+_enforce direction upon intersection types_.
+
+## Replacing Intersections / Differences
+
+Here, the language of Whiley types is tweaked.  Instead of
+intersection types (e.g. `A&B`) and difference types (e.g. `A-B`) we
+have _is_ types (e.g. `A is B`) and _isnot_ types (e.g. `A isnot B`).
+We can then provide this simple mapping from Whiley types to
+underlying types:
+
+```
+int ==> int
+
+T[] ==> S[], where T ==> S
+
+{T1 f1, ... Tn fn} ==> {S1 f1, ... Sn fn}, where T1 ==> S1, ..., Tn ==> Sn
+
+T1 | ... | Tn ==> S1 | ... | Sn, where T1 ==> S1, ..., Tn ==> Sn
+
+int is int     ==> int
+
+int is { ... } ==> void
+
+{ ... } is int ==> void
+
+T[] is int     ==> void
+
+int is T[]     ==> void
+
+{ ... } is T[] ==> void
+
+T[] is { ... } ==> void
+
+T1[] is T2[]   ==> S[], where (T1 is T2) ==> S
+
+{T1 f1, ... Tn fn} is { fs* } ==> {S1 f1, ... Sn fn}, where (T1 is fs[f1] ==> S1, ..., (Tn is fs[fn] ==> Sn ==> Sn
+```
+
+
 
 # Terminology
+
+* **Ambiguous Type.** 
 
 * **Underlying Type.** The least over-approximation of a given Whiley
   type `T` which is used to guide the actual representation of that
