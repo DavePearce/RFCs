@@ -72,7 +72,7 @@ The language of _underlying types_ is given by the following
 (simplified) grammar:
 
 ```
-UT ::= ('int' | 'uint') [':' IntegerConst] | '{' UT Ident (',' UT Ident)+ '}' | UT '[' ']' | UT
+UT ::= `null` | ('int' | 'uint') [':' IntegerConst] | '{' UT Ident (',' UT Ident)+ '}' | UT '[' ']' | UT
 ('|' UT)+
 ```
 
@@ -122,22 +122,20 @@ _One of the interesting qualities of these is that intersection types
 are harder because they lack direction._  This suggests a solution:
 _enforce direction upon intersection types_.
 
-## Replacing Intersections / Differences
+## Is Types
 
-Here, the language of Whiley types is tweaked.  Instead of
-intersection types (e.g. `A&B`) and difference types (e.g. `A-B`) we
-have _is_ types (e.g. `A is B`) and _isnot_ types (e.g. `A isnot B`).
-We can then provide this simple mapping from Whiley types to
-underlying types:
+The language of Whiley types is tweaked.  Instead of intersection
+types (e.g. `A&B`) and difference types (e.g. `A-B`) we have _is_
+types (e.g. `A is B`) and _isnot_ types (e.g. `A isnot B`).  We can
+then provide this simple mapping from Whiley types to underlying
+types,
+
+### Primitive Cases
+
+These cases are straightforward and don't require much clarification.
 
 ```
 int ==> int
-
-T[] ==> S[], where T ==> S
-
-{T1 f1, ... Tn fn} ==> {S1 f1, ... Sn fn}, where T1 ==> S1, ..., Tn ==> Sn
-
-T1 | ... | Tn ==> S1 | ... | Sn, where T1 ==> S1, ..., Tn ==> Sn
 
 int is int     ==> int
 
@@ -152,12 +150,78 @@ int is T[]     ==> void
 { ... } is T[] ==> void
 
 T[] is { ... } ==> void
-
-T1[] is T2[]   ==> S[], where (T1 is T2) ==> S
-
-{T1 f1, ... Tn fn} is { fs* } ==> {S1 f1, ... Sn fn}, where (T1 is fs[f1] ==> S1, ..., (Tn is fs[fn] ==> Sn ==> Sn
 ```
 
+Here, `{ ... }` is taken to represent an arbitrary record type.
+
+### Inductive Cases
+
+These cases are also mostly straightforward and simply reduce an
+outer type based on the reduction of an inner type:
+
+```
+T[] ==> S[], where T ==> S
+
+{T1 f1, ... Tn fn} ==> {S1 f1, ... Sn fn}, where T1 ==> S1, ..., Tn
+==> Sn
+
+{T1 f1, ..., void fi, ... Tn fn} ==> void
+```
+
+The above simply reduce a compound type when one or more of its
+children reduces.  The second case for a record simply eliminates
+records which end up with a `void` field.  Unions are similar:
+
+```
+T1 | ... | Tn ==> S1 | ... | Sn, where T1 ==> S1, ..., Tn ==> Sn
+
+void | ... | T | ... | void ==> T
+
+void | ... | void ==> void
+```
+
+The latter two rules handle `void` in different ways.  For a union
+containing exactly one non-void type, then it reduces to that type.
+Likewise, a union containing only `void` types is reduced to `void`.
+There are some interesting implications of this, such as:
+
+```
+(int|pos[]|neg[]) is int[]
+==> (int is int[]) | (pos[] is int[]) | (neg[] is int[])
+==> void | int[] | int[]
+```
+
+The latter is considered a well-formed underlying union type.  The key
+feature here is that, starting from a union, we are left still with a
+union.  The presence of `void` then ensures that this union has the
+same tag layout.
+
+### Compound Cases
+
+These cases are more complex and require reasonably clarification.
+
+```
+T1[] is T2[]   ==> S[], where (T1 is T2) ==> S
+```
+
+The above enables, for example, `(int|null)[] is int[]` to reduce to `int[]`.
+
+```
+T is T1|T2    ==> (T is T1)|(T is T2)
+```
+
+Likewise, the above enables `int is int|null` to reduce first to
+`int|void` and then `int`.
+
+```
+(T1 is T2) is T3 ==> S is T3, where (T1 is T2) ==> S
+```
+
+This final case handles nested `is` types in a relatively expected
+fashion.  For example, `(int|int[]|null is int|null) is int` reduces
+to `int`.
+
+## Isnot Types
 
 
 # Terminology
