@@ -73,91 +73,44 @@ The language of _underlying types_ is given by the following
 
 ```
 UT ::= `null` | ('int' | 'uint') [':' IntegerConst] | '{' UT Ident (',' UT Ident)+ '}' | UT '[' ']' | UT
-('|' UT)+
+('|' UT)+ | X '<' UT '>'
 ```
 
 For the purposes of this RFC we consider only this simplified
 language, though it is relatively easy to fully extend this.  Note,
 however, that intersection and difference types are _not_ present in
-the language of underlying types.  Likwise, nominal types are also not
-present and some recursive type constructor is required for them.
-Also, unions are _tagged_ and, hence, have a slightly different
-semantic where e.g. `int | int` is permitted and `int|null` is not
-equivalent to `null|int`, etc.  Finally, records have a slightly
-different semantic where e.g. `{int x, int y}` is not equivalent to
-`{int y, int x}`.
+the language of underlying types.  Also, unions are _tagged_ and,
+hence, have a slightly different semantic where e.g. `int | int` is
+permitted and `int|null` is not equivalent to `null|int`, etc.
+Finally, records have a slightly different semantic where e.g. `{int
+x, int y}` is not equivalent to `{int y, int x}`.
+
+The language of _source-level types_ is given by the following
+(simplified) grammar:
+
+```
+T ::= `null` | ('int' | 'uint') [':' IntegerConst] | '{' T Ident (',' T Ident)+ '}' | T '[' ']' | T
+('|' T)+ | T1 'is' T2 | T1 'isnt' T2 | X ['?'] '<' T '>'
+```
+
+The main difference between the source-level and underlying types two
+is the presence of `is` and `isnt` types.  Note, we replace
+intersections with `is` types and differences with `isnt` types.  This
+is needed to give the necessary direction.
 
 **GOAL:** The goal, then, of this RFC is to enable a clear mapping
-  from the Whiley type of a given variable to its underlying type.
+  from the Whiley source type of a given variable to its underlying
+  type.
 
-**CHALLENGE:** The key challenge is that of _ambiguous types_ which
-have no unique mapping to an underlying type.
+## Mapping
 
-## Ambiguous Types
-
-The question then is: _how and where do ambiguous types arise?_ In
-fact, the answer to this is fairly clear.  Ambiguous types can only
-arise in the presence of type intersection or difference.  Examples:
-
-**Intersections:**
-```
-(pos|neg)&pos
-```
-```
-{int x, int y} & {int y, int x}
-```
-```
-({int x, int y, int z}|{int x, int z, int y}) & {int z, int y, int x}
-```
-
-**Differences:**
-```
-(pos|null)-pos
-```
-```
-({int x, int y, int z}|null) - {int z, int y, int x}
-```
-
-_One of the interesting qualities of these is that intersection types
-are harder because they lack direction._  This suggests a solution:
-_enforce direction upon intersection types_.
-
-## Is Types
-
-The language of Whiley types is tweaked.  Instead of intersection
-types (e.g. `A&B`) and difference types (e.g. `A-B`) we have _is_
-types (e.g. `A is B`) and _isnot_ types (e.g. `A isnot B`).  We can
-then provide a simple mapping from Whiley types to underlying
-types.
-
-### Primitive Cases
-
-These cases are straightforward and don't require much clarification.
-
-```
-int ==> int
-
-int is int     ==> int
-
-int is { ... } ==> void
-
-{ ... } is int ==> void
-
-T[] is int     ==> void
-
-int is T[]     ==> void
-
-{ ... } is T[] ==> void
-
-T[] is { ... } ==> void
-```
-
-Here, `{ ... }` is taken to represent an arbitrary record type.
+The rules for converting a source-level type into an underlying type
+are now presented.
 
 ### Inductive Cases
 
-These cases are also mostly straightforward and simply reduce an
-outer type based on the reduction of an inner type:
+These cases describe how changes in an element of some type are
+propagated outwards.
 
 ```
 T[] ==> S[], where T ==> S
@@ -196,7 +149,67 @@ feature here is that, starting from a union, we are left still with a
 union.  The presence of `void` then ensures that this union has the
 same tag layout.
 
-### Compound Cases
+### Is Rule
+
+The case for handling types of the form `T1 is T2` is very easy, as
+follows:
+
+```
+T1 is T2 ==> T2
+```
+
+The benefit of this rule is that the following compiles as expected:
+
+```
+function f(pos|neg x) -> int:
+   if x is pos:
+      return x
+   else:
+      return 0
+```
+
+Here, `x` has type `pos` on the true branch.
+
+### Isnt Rule
+
+This is the more complex rule, as it must eliminate types where
+possible.  We begin with the easy primitive cases:
+
+```
+int isnt int ==> void
+
+int isnt null ==> null
+
+int isnt { ... } ==> int
+
+int isnt T[] ==> int
+
+null isnt null ==> void
+
+null isnt int ==> null
+
+null isnt { ... } ==> null
+
+null isnt T[] ==> null
+
+{ ... } isnt int ==> { ... }
+
+{ ... } isnt null ==> { ... }
+
+{ ... } isnt T[] ==> { ... }
+
+T[] isnt int ==> T[]
+
+T[] isnt null ==> T[]
+
+T[] isnt { ... } ==> T[]
+```
+
+Arrays
+
+Records
+
+Nominals
 
 These cases are more complex and require reasonably clarification.
 
@@ -253,30 +266,6 @@ int isnot T[]     ==> int
 T[] isnot { ... } ==> T[]
 ```
 
-### Compound Cases
-
-These cases are more complex and require reasonably clarification.
-
-```
-T1[] isnot T2[]   ==> T1[], ?????
-```
-
-The above means, for example, `(int|null)[] isnot int[]` correctly reduces to `(int|null)[]`.
-
-```
-T isnot T1|T2    ==> void, if some i.(T isnot Ti) ==> void
-                 ==> T, otherwise
-```
-
-Likewise, the above enables `int isnot int|null` to reduce to `void`.
-
-```
-(T1 isnot T2) isnot T3 ==> S isnot T3, where (T1 isnot T2) ==> S
-```
-
-This final case handles nested `isnot` types in a relatively expected
-fashion.  For example, `(int|int[]|null isnot int|null) isnot int` reduces
-to `int[]`.
 
 # Terminology
 
