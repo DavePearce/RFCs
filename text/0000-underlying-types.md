@@ -127,8 +127,8 @@ _enforce direction upon intersection types_.
 The language of Whiley types is tweaked.  Instead of intersection
 types (e.g. `A&B`) and difference types (e.g. `A-B`) we have _is_
 types (e.g. `A is B`) and _isnot_ types (e.g. `A isnot B`).  We can
-then provide this simple mapping from Whiley types to underlying
-types,
+then provide a simple mapping from Whiley types to underlying
+types.
 
 ### Primitive Cases
 
@@ -223,6 +223,54 @@ to `int`.
 
 ## Isnot Types
 
+The language of Whiley types is updated so that, instead of difference
+types (e.g. `A-B`), we have _isnot_ types (e.g. `A isnot B`).  We can
+then provide a simple mapping from Whiley types to underlying types.
+
+### Primitive Cases
+
+These cases are straightforward and don't require much clarification.
+
+```
+int isnot int     ==> void
+
+int isnot { ... } ==> int
+
+{ ... } isnot int ==> { ... }
+
+T[] isnot int     ==> T[]
+
+int isnot T[]     ==> int
+
+{ ... } isnot T[] ==> { ... }
+
+T[] isnot { ... } ==> T[]
+```
+
+### Compound Cases
+
+These cases are more complex and require reasonably clarification.
+
+```
+T1[] isnot T2[]   ==> T1[], ?????
+```
+
+The above means, for example, `(int|null)[] isnot int[]` correctly reduces to `(int|null)[]`.
+
+```
+T isnot T1|T2    ==> void, if some i.(T isnot Ti) ==> void
+                 ==> T, otherwise
+```
+
+Likewise, the above enables `int isnot int|null` to reduce to `void`.
+
+```
+(T1 isnot T2) isnot T3 ==> S isnot T3, where (T1 isnot T2) ==> S
+```
+
+This final case handles nested `isnot` types in a relatively expected
+fashion.  For example, `(int|int[]|null isnot int|null) isnot int` reduces
+to `int[]`.
 
 # Terminology
 
