@@ -274,7 +274,12 @@ to `int[]`.
 
 # Terminology
 
-* **Ambiguous Type.** 
+* **Ambiguous Type.** An ambiguous type is a type at the Whiley source
+  level which cannot be reduced to eliminate all occurrences of
+  intersection or difference types.  For example, `({int|null f, int
+  g}|{int f, int|null f})&{int f, int g}` is ambiguous.  This is
+  because the intersection represents a _type selector_, but we cannot
+  determine which type is being selected.
 
 * **Underlying Type.** The least over-approximation of a given Whiley
   type `T` which is used to guide the actual representation of that
@@ -286,4 +291,6 @@ None.
 
 # Unresolved Issues
 
-None.
+## Recursive Types
+
+
