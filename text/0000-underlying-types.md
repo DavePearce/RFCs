@@ -113,10 +113,10 @@ These cases describe how changes in an element of some type are
 propagated outwards.
 
 ```
-T[] ==> S[], where T ==> S
+T[] ==> UT[], where T ==> UT
 
-{T1 f1, ... Tn fn} ==> {S1 f1, ... Sn fn}, where T1 ==> S1, ..., Tn
-==> Sn
+{T1 f1, ... Tn fn} ==> {UT1 f1, ... UTn fn}, where T1 ==> UT1, ..., Tn
+==> UTn
 
 {T1 f1, ..., void fi, ... Tn fn} ==> void
 ```
@@ -126,7 +126,7 @@ children reduces.  The second case for a record simply eliminates
 records which end up with a `void` field.  Unions are similar:
 
 ```
-T1 | ... | Tn ==> S1 | ... | Sn, where T1 ==> S1, ..., Tn ==> Sn
+T1 | ... | Tn ==> UT1 | ... | UTn, where T1 ==> UT1, ..., Tn ==> UTn
 
 void | ... | T | ... | void ==> T
 
@@ -155,7 +155,7 @@ The case for handling types of the form `T1 is T2` is very easy, as
 follows:
 
 ```
-T1 is T2 ==> T2
+T1 is T2 ==> UT, where T2 ==> UT
 ```
 
 The benefit of this rule is that the following compiles as expected:
@@ -192,11 +192,11 @@ null isnt { ... } ==> null
 
 null isnt T[] ==> null
 
-{ ... } isnt int ==> { ... }
+{ T1 f1, ..., Tn fn } isnt int ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
 
-{ ... } isnt null ==> { ... }
+{ T1 f1, ..., Tn fn } isnt null ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
 
-{ ... } isnt T[] ==> { ... }
+{ T1 f1, ..., Tn fn } isnt T[] ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
 
 T[] isnt int ==> T[]
 
@@ -208,12 +208,15 @@ T[] isnt { ... } ==> T[]
 **Arrays.**  The rule for arrays is surprisingly simple:
 
 ```
-T1[] isnt T2[] ==> T1[]
+T1[] isnt T2[] ==> T1[], if T1 :> T2
+
+T1[] isnt T2[] ==> void, otherwise
 ```
 
-This is necessary we cannot safely refine arrays under any
-circumstances.  For example, `(int|null)[] isnt int[]` cannot refine
-to `null[]` as `[1,null] isnt int[]` holds.
+By the first rule, we have `(int|null)[] isnt int[]` refines to
+`(int|null)[]` which follows as `[1,null] isnt int[]` holds.
+Likewise, by the second rule, we have `int[] isnt (int|null)[]`
+refines to `null`.
 
 Records
 
