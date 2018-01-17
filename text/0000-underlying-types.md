@@ -205,7 +205,15 @@ T[] isnt null ==> T[]
 T[] isnt { ... } ==> T[]
 ```
 
-Arrays
+**Arrays.**  The rule for arrays is surprisingly simple:
+
+```
+T1[] isnt T2[] ==> T1[]
+```
+
+This is necessary we cannot safely refine arrays under any
+circumstances.  For example, `(int|null)[] isnt int[]` cannot refine
+to `null[]` as `[1,null] isnt int[]` holds.
 
 Records
 
@@ -266,7 +274,7 @@ int isnot T[]     ==> int
 T[] isnot { ... } ==> T[]
 ```
 
-
+###
 # Terminology
 
 * **Ambiguous Type.** An ambiguous type is a type at the Whiley source
