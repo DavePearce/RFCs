@@ -214,6 +214,12 @@ Likewise, the above enables `int is int|null` to reduce first to
 `int|void` and then `int`.
 
 ```
+T1|T2 is T    ==> (T1 is T)|(T2 is T)
+```
+
+This, unfortunately, implies that `pos|neg is pos` reduces to `int|int`.
+
+```
 (T1 is T2) is T3 ==> S is T3, where (T1 is T2) ==> S
 ```
 
