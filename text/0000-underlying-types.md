@@ -73,7 +73,7 @@ The language of _underlying types_ is given by the following
 
 ```
 UT ::= `null` | ('int' | 'uint') [':' IntegerConst] | '{' UT Ident (',' UT Ident)+ '}' | UT '[' ']' | UT
-('|' UT)+ | X '<' UT '>'
+('|' UT)+ | Ident '<' UT '>' | Ident
 ```
 
 For the purposes of this RFC we consider only this simplified
@@ -83,14 +83,16 @@ the language of underlying types.  Also, unions are _tagged_ and,
 hence, have a slightly different semantic where e.g. `int | int` is
 permitted and `int|null` is not equivalent to `null|int`, etc.
 Finally, records have a slightly different semantic where e.g. `{int
-x, int y}` is not equivalent to `{int y, int x}`.
+x, int y}` is not equivalent to `{int y, int x}`.  Finally, a
+recursive type looks something like this: `X<null|{int data, X
+next}>`.
 
 The language of _source-level types_ is given by the following
 (simplified) grammar:
 
 ```
 T ::= `null` | ('int' | 'uint') [':' IntegerConst] | '{' T Ident (',' T Ident)+ '}' | T '[' ']' | T
-('|' T)+ | T1 'is' T2 | T1 'isnt' T2 | X ['?'] '<' T '>'
+('|' T)+ | T1 'is' T2 | T1 'isnt' T2 | Ident ['?'] '<' T '>' | Ident
 ```
 
 The main difference between the source-level and underlying types two
@@ -102,10 +104,54 @@ is needed to give the necessary direction.
   from the Whiley source type of a given variable to its underlying
   type.
 
-## Mapping
+The key issue here that the underlying types determine exactly how
+data will be represented on a machine.  For example, the type
+`int|int` will be represented as a tagged union with two elements.  We
+can think of the source-level types as being "abstract" in some sense,
+whilst the underlying types are "concrete".
 
-The rules for converting a source-level type into an underlying type
-are now presented.
+## Baseline
+
+The simplest (yet safe) method for translating between source-level
+types and underlying types is two apply these two rules:
+
+```
+T1 is T2 ==> T3, where T1 ==> T3
+
+
+T1 isnt T2 ==> T3, where T1 ==> T3
+```
+
+This approach simply drops type refinements alogether.  This is safe
+but, of course, not efficient.  For example, consider this program:
+
+```
+function add(int|null lhs, int|null rhs) -> int|null:
+   if lhs is int && rhs is int:
+      lhs = lhs + rhs
+   return lhs
+```
+
+Using our two rules above, the translation of this to low-level
+machine representation (e.g. C) would look something like this:
+
+```
+type tagged_t is { int tag, int|null data }
+
+function add(tagged_t lhs, tagged_t rhs) -> tagged_t:
+   if lhs is int && rhs is int:
+      lhs.data = lhs.data + rhs.data
+   return lhs
+```
+
+They key is that the declared type of `lhs` is its type throughout,
+and the type tests do not change this.  The effect is that we must
+constantly cast `lhs` as we attempt to use it.
+
+## Improvements
+
+We now consider various rules which can lead to a better mapping from
+source-level types to underlying types.
 
 ### Inductive Cases
 
@@ -251,11 +297,6 @@ This final case handles nested `is` types in a relatively expected
 fashion.  For example, `(int|int[]|null is int|null) is int` reduces
 to `int`.
 
-## Isnot Types
-
-The language of Whiley types is updated so that, instead of difference
-types (e.g. `A-B`), we have _isnot_ types (e.g. `A isnot B`).  We can
-then provide a simple mapping from Whiley types to underlying types.
 
 ### Primitive Cases
 
@@ -283,7 +324,7 @@ T[] isnot { ... } ==> T[]
 * **Ambiguous Type.** An ambiguous type is a type at the Whiley source
   level which cannot be reduced to eliminate all occurrences of
   intersection or difference types.  For example, `({int|null f, int
-  g}|{int f, int|null f})&{int f, int g}` is ambiguous.  This is
+  g}|{int f, int|null f}) is {int f, int g}` is ambiguous.  This is
   because the intersection represents a _type selector_, but we cannot
   determine which type is being selected.
 
