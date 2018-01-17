@@ -291,6 +291,39 @@ None.
 
 # Unresolved Issues
 
-## Recursive Types
+### Recursive Types
 
+The hard case seems to be how to correctly deal with recursive types.
+The typical example would be something like this:
 
+```
+type IN_List is null|{ IN_List next, int|null data }
+type I_List is null|{ I_List next, int data }
+
+function check(IN_List l) -> bool:
+	return l is I_List
+```
+
+The type we are trying to reduce would probably be expressed like so:
+
+```
+IN_List<null|{IN_List next, int|null data}> is I_List<null|{I_List next, int data}>
+```
+To handle this, we might formulate a rule such as the following:
+```
+X<T1> is Y<T2> ==> Z<T3>, where T1 is T2 ==> T3 assuming X is Y ==> Z
+```
+
+Here, `Z` is an arbitrary introduced name for simplicity.  In our
+previous example, we'd have something like this:
+
+```
+==> null|{IN_List next, int|null data} is null|{I_List next, int data}
+==> (null is null|{I_List next, int data}) | ({IN_List next, int|null
+data} is null|{I_List next, int data})
+==> null | { IN_List is I_List next, int|null is int data}
+==> null | { Z next, int data}
+```
+
+Here, `Z` is some introduced name.  This kinda works, though am not
+really sure how to go about implementing it.
