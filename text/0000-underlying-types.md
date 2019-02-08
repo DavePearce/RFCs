@@ -148,6 +148,141 @@ They key is that the declared type of `lhs` is its type throughout,
 and the type tests do not change this.  The effect is that we must
 constantly cast `lhs` as we attempt to use it.
 
+### Inductive Cases
+
+These cases describe how changes in an element of some type are
+propagated outwards.
+
+```
+T[] ==> UT[], where T ==> UT
+
+{T1 f1, ... Tn fn} ==> {UT1 f1, ... UTn fn}, where T1 ==> UT1, ..., Tn
+==> UTn
+
+{T1 f1, ..., void fi, ... Tn fn} ==> void
+```
+
+The above simply reduce a compound type when one or more of its
+children reduces.  The second case for a record simply eliminates
+records which end up with a `void` field.  Unions are similar:
+
+```
+T1 | ... | Tn ==> UT1 | ... | UTn, where T1 ==> UT1, ..., Tn ==> UTn
+
+void | ... | T | ... | void ==> T
+
+void | ... | void ==> void
+```
+
+The latter two rules handle `void` in different ways.  For a union
+containing exactly one non-void type, then it reduces to that type.
+Likewise, a union containing only `void` types is reduced to `void`.
+There are some interesting implications of this, such as:
+
+```
+(int|pos[]|neg[]) is int[]
+==> (int is int[]) | (pos[] is int[]) | (neg[] is int[])
+==> void | int[] | int[]
+```
+
+The latter is considered a well-formed underlying union type.  The key
+feature here is that, starting from a union, we are left still with a
+union.  The presence of `void` then ensures that this union has the
+same tag layout.
+
+### Is Rule
+
+The case for handling types of the form `T1 is T2` is very easy, as
+follows:
+
+```
+T1 is T2 ==> UT, where T2 ==> UT
+```
+
+The benefit of this rule is that the following compiles as expected:
+
+```
+function f(pos|neg x) -> int:
+   if x is pos:
+      return x
+   else:
+      return 0
+```
+
+Here, `x` has type `pos` on the true branch.
+
+### Isnt Rules
+
+These are the more complex rules, as we must actually eliminate types
+where possible.  We begin with the easy primitive cases:
+
+```
+int isnt int ==> void
+
+int isnt null ==> null
+
+int isnt { ... } ==> int
+
+int isnt T[] ==> int
+
+null isnt null ==> void
+
+null isnt int ==> null
+
+null isnt { ... } ==> null
+
+null isnt T[] ==> null
+
+{ T1 f1, ..., Tn fn } isnt int ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
+
+{ T1 f1, ..., Tn fn } isnt null ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
+
+{ T1 f1, ..., Tn fn } isnt T[] ==> { UT1 f1, ..., UTn fn }, where T1 ==> UT1, ..., Tn ==> UTn
+
+T[] isnt int ==> T[]
+
+T[] isnt null ==> T[]
+
+T[] isnt { ... } ==> T[]
+```
+
+**Arrays.**  The rules for arrays are surprisingly simple:
+
+```
+T1[] isnt T2[] ==> UT[], if T1 :> T2 and T1 ==> UT
+
+T1[] isnt T2[] ==> void, otherwise
+```
+
+By the first rule, we have `(int|null)[] isnt int[]` refines to
+`(int|null)[]` which follows as `[1,null] isnt int[]` holds.
+Likewise, by the second rule, we have `int[] isnt (int|null)[]`
+refines to `null`.
+
+**Records.** The rule for records is more involved:
+
+```
+{ T1 f1, ..., Tn fn } isnt { S1 g1, ..., Sm gm } ==> { UT1 f1, ...,
+UTn fn }, where {f1,...fn} != {g1,...,gm} and T1 ==> UT1, ..., Tn ==> UTn
+
+{ T1 f1, ..., Tn fn } isnt { S1 g1, ..., Sn gn } ==> ?????
+```
+
+{ int|null x, int|null y} isnt { int x, int y }
+==> { int|null isnt int x, int|null y }|{ int|null x, int|null isnt
+int y }
+==> { null x, int|null y}|{ int|null x, null y}
+
+**General Rule.**
+
+```
+T1 isnt T2 ==> void, if T1 <: T2
+
+T1 isnt T2 ==> T1, otherwise
+```
+
+**Nominals.**
+
 ###
 # Terminology
 
